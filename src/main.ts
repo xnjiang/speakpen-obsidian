@@ -25,13 +25,13 @@ export default class SpeakPenPlugin extends Plugin {
     this.updateStatusBar();
 
     // Ribbon icon
-    this.addRibbonIcon("refresh-cw", "SpeakPen: Sync now", async () => {
+    this.addRibbonIcon("refresh-cw", "SpeakPen: sync now", async () => {
       await this.runSync();
     });
 
     // Command
     this.addCommand({
-      id: "speakpen-sync-now",
+      id: "sync-now",
       name: "Sync now",
       callback: async () => {
         await this.runSync();
@@ -68,7 +68,7 @@ export default class SpeakPenPlugin extends Plugin {
     if (this.settings.autoSyncEnabled && this.settings.apiToken) {
       const ms = this.settings.autoSyncIntervalMinutes * 60 * 1000;
       this.autoSyncIntervalId = window.setInterval(() => {
-        this.runSync(true);
+        void this.runSync(true);
       }, ms);
       this.registerInterval(this.autoSyncIntervalId);
     }
@@ -95,7 +95,7 @@ export default class SpeakPenPlugin extends Plugin {
   async runSync(silent = false) {
     if (this.isSyncing) return;
     if (!this.settings.apiToken) {
-      if (!silent) new Notice("SpeakPen: Please set your API token in settings.");
+      if (!silent) new Notice("SpeakPen: please set your API token in settings.");
       return;
     }
 
@@ -110,7 +110,7 @@ export default class SpeakPenPlugin extends Plugin {
       const newIdeas = getNewIdeas(allIdeas, syncedSet);
 
       if (newIdeas.length === 0) {
-        if (!silent) new Notice("SpeakPen: No new ideas to sync.");
+        if (!silent) new Notice("SpeakPen: no new ideas to sync.");
       } else {
         const count = await syncIdeasToVault(
           newIdeas,
@@ -123,14 +123,14 @@ export default class SpeakPenPlugin extends Plugin {
           this.syncState.syncedIds.push(idea.id);
         }
 
-        new Notice(`SpeakPen: Synced ${count} new idea${count > 1 ? "s" : ""}.`);
+        new Notice(`SpeakPen: synced ${count} new idea${count > 1 ? "s" : ""}.`);
       }
 
       this.syncState.lastSyncTime = new Date().toISOString();
       await this.savePluginData();
-    } catch (error: any) {
-      const msg = error?.message ?? "Unknown error";
-      new Notice(`SpeakPen: Sync failed — ${msg}`);
+    } catch (error: unknown) {
+      const msg = (error as { message?: string })?.message ?? "Unknown error";
+      new Notice(`SpeakPen: sync failed — ${msg}`);
       console.error("SpeakPen sync error:", error);
     } finally {
       this.isSyncing = false;

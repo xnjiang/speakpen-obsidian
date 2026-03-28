@@ -13,14 +13,14 @@ export class SpeakPenSettingTab extends PluginSettingTab {
     const { containerEl } = this;
     containerEl.empty();
 
-    containerEl.createEl("h2", { text: "SpeakPen Sync Settings" });
+    new Setting(containerEl).setName("SpeakPen Sync settings").setHeading();
 
     new Setting(containerEl)
-      .setName("API Token")
-      .setDesc("Your SpeakPen API token. Get it from the SpeakPen app settings.")
+      .setName("API token")
+      .setDesc("Your SpeakPen API token. You can find it in the SpeakPen app settings.")
       .addText((text) =>
         text
-          .setPlaceholder("Enter your API token")
+          .setPlaceholder("Paste your API token")
           .setValue(this.plugin.settings.apiToken)
           .onChange(async (value) => {
             this.plugin.settings.apiToken = value;
@@ -29,8 +29,8 @@ export class SpeakPenSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("Sync Folder")
-      .setDesc("Vault folder where SpeakPen notes will be created.")
+      .setName("Sync folder")
+      .setDesc("The vault folder where SpeakPen notes will be created.")
       .addText((text) =>
         text
           .setPlaceholder("SpeakPen")
@@ -42,7 +42,7 @@ export class SpeakPenSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("Auto Sync")
+      .setName("Auto sync")
       .setDesc("Automatically sync new ideas on an interval.")
       .addToggle((toggle) =>
         toggle
@@ -55,8 +55,8 @@ export class SpeakPenSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("Sync Interval (minutes)")
-      .setDesc("How often to check for new ideas. Minimum 1 minute.")
+      .setName("Sync interval (minutes)")
+      .setDesc("How often to check for new ideas (minimum 1 minute).")
       .addSlider((slider) =>
         slider
           .setLimits(1, 60, 1)

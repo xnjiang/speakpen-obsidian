@@ -63,6 +63,6 @@ describe("SpeakPenAPI", () => {
   it("throws on 401 unauthorized", async () => {
     mockRequestUrl.mockRejectedValueOnce({ status: 401 });
 
-    await expect(api.fetchIdeasPage(1)).rejects.toThrow("Invalid API Token");
+    await expect(api.fetchIdeasPage(1)).rejects.toThrow("Invalid API token");
   });
 });

@@ -17,11 +17,12 @@ export class SpeakPenAPI {
         },
       });
       return response.json as IdeasResponse;
-    } catch (error: any) {
-      if (error?.status === 401) {
-        throw new Error("Invalid API Token");
+    } catch (error: unknown) {
+      const err = error as { status?: number; message?: string };
+      if (err?.status === 401) {
+        throw new Error("Invalid API token");
       }
-      throw new Error(`API request failed: ${error?.message ?? "Unknown error"}`);
+      throw new Error(`API request failed: ${err?.message ?? "Unknown error"}`);
     }
   }
 

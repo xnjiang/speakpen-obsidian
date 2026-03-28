@@ -1,6 +1,6 @@
 # SpeakPen Sync
 
-Sync your [SpeakPen](https://speakpen.app) voice summaries into Obsidian as Markdown notes.
+Sync your [SpeakPen](https://speakpen.app) voice summaries into your vault as Markdown notes.
 
 ## Features
 
@@ -54,7 +54,7 @@ Each synced idea is saved as a Markdown file in your configured folder (default:
 ## Development
 
 ```bash
-git clone https://github.com/anthropics/speakpen-obsidian.git
+git clone https://github.com/xnjiang/speakpen-obsidian.git
 cd speakpen-obsidian
 npm install
 npm run dev    # development build

@@ -1,7 +1,7 @@
 {
   "name": "speakpen-obsidian",
   "version": "0.1.0",
-  "description": "SpeakPen sync plugin for Obsidian",
+  "description": "Sync your SpeakPen voice summaries into your vault as Markdown notes.",
   "main": "main.js",
   "scripts": {
     "dev": "node esbuild.config.mjs",

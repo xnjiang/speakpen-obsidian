@@ -1,4 +1,4 @@
-import { Plugin, Notice, normalizePath } from "obsidian";
+import { Plugin, Notice } from "obsidian";
 import {
   SpeakPenSettings,
   DEFAULT_SETTINGS,
@@ -25,7 +25,7 @@ export default class SpeakPenPlugin extends Plugin {
     this.updateStatusBar();
 
     // Ribbon icon
-    this.addRibbonIcon("refresh-cw", "SpeakPen: sync now", async () => {
+    this.addRibbonIcon("refresh-cw", "Sync now", async () => {
       await this.runSync();
     });
 
@@ -86,21 +86,21 @@ export default class SpeakPenPlugin extends Plugin {
     if (this.syncState.lastSyncTime) {
       const t = new Date(this.syncState.lastSyncTime);
       const timeStr = t.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-      this.statusBarEl.setText(`SpeakPen: last sync ${timeStr}`);
+      this.statusBarEl.setText(`Synced ${timeStr}`);
     } else {
-      this.statusBarEl.setText("SpeakPen: not synced");
+      this.statusBarEl.setText("Not synced");
     }
   }
 
   async runSync(silent = false) {
     if (this.isSyncing) return;
     if (!this.settings.apiToken) {
-      if (!silent) new Notice("SpeakPen: please set your API token in settings.");
+      if (!silent) new Notice("Please set your API token in settings.");
       return;
     }
 
     this.isSyncing = true;
-    if (this.statusBarEl) this.statusBarEl.setText("SpeakPen: syncing...");
+    if (this.statusBarEl) this.statusBarEl.setText("Syncing...");
 
     try {
       const api = new SpeakPenAPI(this.settings.apiToken);
@@ -110,7 +110,7 @@ export default class SpeakPenPlugin extends Plugin {
       const newIdeas = getNewIdeas(allIdeas, syncedSet);
 
       if (newIdeas.length === 0) {
-        if (!silent) new Notice("SpeakPen: no new ideas to sync.");
+        if (!silent) new Notice("No new ideas to sync.");
       } else {
         const count = await syncIdeasToVault(
           newIdeas,
@@ -123,14 +123,14 @@ export default class SpeakPenPlugin extends Plugin {
           this.syncState.syncedIds.push(idea.id);
         }
 
-        new Notice(`SpeakPen: synced ${count} new idea${count > 1 ? "s" : ""}.`);
+        new Notice(`Synced ${count} new idea${count > 1 ? "s" : ""}.`);
       }
 
       this.syncState.lastSyncTime = new Date().toISOString();
       await this.savePluginData();
     } catch (error: unknown) {
       const msg = (error as { message?: string })?.message ?? "Unknown error";
-      new Notice(`SpeakPen: sync failed — ${msg}`);
+      new Notice(`Sync failed — ${msg}`);
       console.error("SpeakPen sync error:", error);
     } finally {
       this.isSyncing = false;

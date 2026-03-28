@@ -2,3 +2,5 @@
 export const requestUrl = async (..._args: any[]) => {
   throw new Error("requestUrl not mocked");
 };
+
+export const normalizePath = (path: string): string => path;

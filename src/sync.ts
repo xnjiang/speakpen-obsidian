@@ -15,9 +15,9 @@ export function buildMarkdown(idea: APIIdea): string {
   lines.push("---");
   lines.push(`speakpen_id: "${idea.id}"`);
   lines.push(`title: "${(a.title ?? "Untitled").replace(/"/g, '\\"')}"`);
-  if (a.category) lines.push(`category: "${a.category}"`);
+  lines.push(a.category ? `category: "${a.category}"` : "category: null");
   lines.push(`created_at: ${a.created_at}`);
-  if (a.audio_url) lines.push(`audio_url: "${a.audio_url}"`);
+  lines.push(a.audio_url ? `audio_url: "${a.audio_url}"` : "audio_url: null");
   lines.push(`synced_at: ${new Date().toISOString()}`);
   lines.push("---");
   lines.push("");

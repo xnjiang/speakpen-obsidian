@@ -130,7 +130,7 @@ export default class SpeakPenPlugin extends Plugin {
       await this.savePluginData();
     } catch (error: any) {
       const msg = error?.message ?? "Unknown error";
-      if (!silent) new Notice(`SpeakPen: Sync failed — ${msg}`);
+      new Notice(`SpeakPen: Sync failed — ${msg}`);
       console.error("SpeakPen sync error:", error);
     } finally {
       this.isSyncing = false;

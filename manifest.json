@@ -3,7 +3,7 @@
   "name": "SpeakPen Sync",
   "version": "0.1.0",
   "minAppVersion": "1.0.0",
-  "description": "Sync your SpeakPen voice summaries into Obsidian as Markdown notes.",
+  "description": "Sync your SpeakPen voice summaries into your vault as Markdown notes.",
   "author": "SpeakPen",
   "isDesktopOnly": false
 }

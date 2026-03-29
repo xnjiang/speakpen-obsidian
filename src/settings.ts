@@ -15,7 +15,7 @@ export class SpeakPenSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName("API token")
-      .setDesc("Your API token from the SpeakPen app.")
+      .setDesc("Paste the token found in your account settings.")
       .addText((text) =>
         text
           .setPlaceholder("Paste your API token")
@@ -31,7 +31,7 @@ export class SpeakPenSettingTab extends PluginSettingTab {
       .setDesc("Vault folder where synced notes will be created.")
       .addText((text) =>
         text
-          .setPlaceholder("SpeakPen")
+          .setPlaceholder("speakpen")
           .setValue(this.plugin.settings.syncFolder)
           .onChange(async (value) => {
             this.plugin.settings.syncFolder = value || "SpeakPen";

@@ -31,7 +31,7 @@ export class SpeakPenSettingTab extends PluginSettingTab {
       .setDesc("Vault folder where synced notes will be created.")
       .addText((text) =>
         text
-          .setPlaceholder("speakpen")
+          .setPlaceholder("Enter folder name")
           .setValue(this.plugin.settings.syncFolder)
           .onChange(async (value) => {
             this.plugin.settings.syncFolder = value || "SpeakPen";

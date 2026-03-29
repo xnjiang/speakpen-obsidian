@@ -13,8 +13,6 @@ export class SpeakPenSettingTab extends PluginSettingTab {
     const { containerEl } = this;
     containerEl.empty();
 
-    new Setting(containerEl).setName("General").setHeading();
-
     new Setting(containerEl)
       .setName("API token")
       .setDesc("Your API token from the SpeakPen app.")

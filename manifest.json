@@ -1,9 +1,10 @@
 {
   "id": "speakpen-sync",
   "name": "SpeakPen Sync",
-  "version": "0.1.0",
-  "minAppVersion": "1.0.0",
-  "description": "Sync your SpeakPen voice summaries into your vault as Markdown notes.",
+  "version": "0.1.1",
+  "minAppVersion": "1.4.0",
+  "description": "Sync your SpeakPen voice notes into your vault as Markdown, with AI summaries and transcripts.",
   "author": "SpeakPen",
+  "authorUrl": "https://speakpen.app",
   "isDesktopOnly": false
 }

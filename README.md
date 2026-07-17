@@ -12,10 +12,16 @@ Sync your [SpeakPen](https://speakpen.app) voice summaries into your vault as Ma
 
 ## Setup
 
-1. Install the plugin from Obsidian Community Plugins
-2. Go to **Settings → SpeakPen Sync**
+1. Install SpeakPen Sync (once it is available in **Settings → Community plugins → Browse**, search for "SpeakPen"; until then, see Manual installation below)
+2. Enable it, then go to **Settings → SpeakPen Sync**
 3. Paste your API Token (generate one from SpeakPen web app → Settings → API Tokens)
 4. Configure sync folder and interval as needed
+
+### Manual installation
+
+1. Download `main.js`, `manifest.json` (and `styles.css` if present) from the [latest release](https://github.com/xnjiang/speakpen-obsidian/releases).
+2. Create a folder `<your vault>/.obsidian/plugins/speakpen-sync/` and copy those files into it.
+3. Reload Obsidian and enable **SpeakPen Sync** under **Settings → Community plugins**.
 
 ## Note Format
 

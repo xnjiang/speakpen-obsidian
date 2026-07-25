@@ -12,12 +12,20 @@ Sync your [SpeakPen](https://speakpen.app) voice summaries into your vault as Ma
 
 ## Setup
 
-1. Install SpeakPen Sync (once it is available in **Settings → Community plugins → Browse**, search for "SpeakPen"; until then, see Manual installation below)
+1. In Obsidian, go to **Settings → Community plugins → Browse**, search for "SpeakPen Sync", and install it
 2. Enable it, then go to **Settings → SpeakPen Sync**
-3. Paste your API Token (generate one from SpeakPen web app → Settings → API Tokens)
+3. Paste your API token. Generate one in the SpeakPen **web app** at
+   [speakpen.app/app](https://speakpen.app/app) → **Settings → API Tokens** — tokens are
+   issued on the web, not in the iOS app
 4. Configure sync folder and interval as needed
 
+Audio is intentionally not linked from the note: the API hands out presigned URLs that
+expire within hours, and a note is written once and never rewritten, so the link would be
+dead by the next day. Use `speakpen_id` to find the recording back in SpeakPen.
+
 ### Manual installation
+
+Only needed if you are installing a build that is not in the store yet.
 
 1. Download `main.js`, `manifest.json` (and `styles.css` if present) from the [latest release](https://github.com/xnjiang/speakpen-obsidian/releases).
 2. Create a folder `<your vault>/.obsidian/plugins/speakpen-sync/` and copy those files into it.
@@ -32,7 +40,6 @@ Each synced idea is saved as a Markdown file in your configured folder (default:
     title: "Meeting Notes"
     category: "Meeting"
     created_at: 2026-03-28T10:00:00Z
-    audio_url: "https://..."
     synced_at: 2026-03-28T10:05:00Z
     ---
 

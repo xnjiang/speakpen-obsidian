@@ -17,7 +17,10 @@ export function buildMarkdown(idea: APIIdea): string {
   lines.push(`title: "${(a.title ?? "Untitled").replace(/"/g, '\\"')}"`);
   lines.push(a.category ? `category: "${a.category}"` : "category: null");
   lines.push(`created_at: ${a.created_at}`);
-  lines.push(a.audio_url ? `audio_url: "${a.audio_url}"` : "audio_url: null");
+  // `audio_url` is deliberately not written. The API returns a presigned URL that
+  // expires within hours, and notes are only ever created, never rewritten — so
+  // persisting it would leave every note holding a link that is dead by the next
+  // day. `speakpen_id` is enough to find the recording back in SpeakPen.
   lines.push(`synced_at: ${new Date().toISOString()}`);
   lines.push("---");
   lines.push("");

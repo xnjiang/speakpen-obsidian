@@ -15,7 +15,9 @@ export class SpeakPenSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName("API token")
-      .setDesc("Paste the token found in your account settings.")
+      .setDesc(
+        "Generate a token in the SpeakPen web app at speakpen.app/app, under Settings → API Tokens, then paste it here."
+      )
       .addText((text) =>
         text
           .setPlaceholder("Paste your API token")

@@ -35,6 +35,22 @@ describe("buildMarkdown", () => {
     expect(md).toContain("This is the transcript.");
   });
 
+  // The API presigns audio_url with a expiry measured in hours, and a note is
+  // written once and never rewritten. Persisting the URL would bake a link into
+  // the vault that stops working the same day, so it must stay out of the note.
+  it("never writes the expiring audio_url into the note", () => {
+    const idea = makeIdea({
+      attributes: {
+        audio_url:
+          "https://r2.speakpen.app/audio/test.m4a?X-Amz-Signature=deadbeef&X-Amz-Expires=43200",
+      } as any,
+    });
+    const md = buildMarkdown(idea);
+
+    expect(md).not.toContain("audio_url");
+    expect(md).not.toContain("X-Amz-Signature");
+  });
+
   it("omits transcript section when transcript_text is null", () => {
     const idea = makeIdea({ attributes: { transcript_text: null } as any });
     const md = buildMarkdown(idea);

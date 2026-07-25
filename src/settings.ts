@@ -13,11 +13,20 @@ export class SpeakPenSettingTab extends PluginSettingTab {
     const { containerEl } = this;
     containerEl.empty();
 
+    // 说明里点明 token 存在哪、什么动作会带走它、以及可以随时吊销。
+    // 语气保持平实：token 是只读的，说清事实即可，不必渲染成风险提示。
+    const tokenDesc = new DocumentFragment();
+    tokenDesc.append(
+      "Generate a token in the SpeakPen web app at speakpen.app/app, under Settings → API Tokens, then paste it here."
+    );
+    tokenDesc.append(tokenDesc.createEl("br"));
+    tokenDesc.append(
+      "Like any Obsidian plugin setting, it is saved as plain text in this vault, so it travels with the vault if you sync or commit it. The token is read-only, and you can revoke it in SpeakPen at any time."
+    );
+
     new Setting(containerEl)
       .setName("API token")
-      .setDesc(
-        "Generate a token in the SpeakPen web app at speakpen.app/app, under Settings → API Tokens, then paste it here."
-      )
+      .setDesc(tokenDesc)
       .addText((text) =>
         text
           .setPlaceholder("Paste your API token")

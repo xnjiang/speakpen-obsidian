@@ -22,6 +22,23 @@ Audio is intentionally not linked from the note: the API hands out presigned URL
 expire within hours, and a note is written once and never rewritten, so the link would be
 dead by the next day. Use `speakpen_id` to find the recording back in SpeakPen.
 
+## About your API token
+
+The token is read-only — it can list and read your SpeakPen notes, and nothing else. It cannot
+edit or delete them, share them, or change your account.
+
+Like every Obsidian plugin setting, it is stored as plain text in
+`<your vault>/.obsidian/plugins/speakpen-sync/data.json`. That file is part of your vault, so it
+travels with it when you sync to cloud storage or commit the vault to a git repository. If you
+keep your vault in git and would rather leave plugin credentials out of it, add this to your
+`.gitignore`:
+
+    .obsidian/plugins/*/data.json
+
+You can revoke a token whenever you like — in the SpeakPen app under **Settings → API Tokens**,
+or on the web at [speakpen.app/app](https://speakpen.app/app). Revoking takes effect immediately;
+generate a new one and paste it back in to resume syncing.
+
 ### Manual installation
 
 Only needed if you are installing a build that is not in the store yet.

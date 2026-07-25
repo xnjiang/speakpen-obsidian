@@ -1,5 +1,5 @@
 import { Vault, normalizePath } from "obsidian";
-import { APIIdea, SyncFailure, SyncResult } from "./types";
+import { APIIdea, SyncFailure, SyncReport, SyncState, SyncedNote } from "./types";
 
 /** Remove characters that are invalid in filenames */
 export function sanitizeFilename(name: string): string {
@@ -47,6 +47,21 @@ export function getNewIdeas(ideas: APIIdea[], syncedIds: Set<string>): APIIdea[]
   return ideas.filter(
     (idea) => idea.attributes.status === "completed" && !syncedIds.has(idea.id)
   );
+}
+
+/**
+ * Cheap non-cryptographic hash (FNV-1a), used only to notice that a file changed.
+ *
+ * The question being asked is "is this still the text we wrote?", so collision
+ * resistance does not matter; being synchronous and dependency-free does.
+ */
+export function hashContent(text: string): string {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return hash.toString(16);
 }
 
 /** Generate a unique file path, appending (1), (2), etc. if needed */
@@ -115,20 +130,90 @@ export async function syncIdeasToVault(
   ideas: APIIdea[],
   folder: string,
   vault: Vault,
-): Promise<SyncResult> {
-  await ensureFolder(folder, vault);
+  state: SyncState,
+): Promise<SyncReport> {
+  const report: SyncReport = {
+    created: [],
+    updated: [],
+    unchanged: [],
+    localEdits: [],
+    failures: [],
+    notes: {},
+    cursor: state.cursor,
+  };
 
-  const syncedIds: string[] = [];
-  const failures: SyncFailure[] = [];
+  const completed = ideas.filter((idea) => idea.attributes.status === "completed");
+  if (completed.length > 0) {
+    await ensureFolder(folder, vault);
+  }
 
-  for (const idea of ideas) {
+  const legacy = new Set(state.legacyIds);
+
+  for (const idea of completed) {
     try {
-      const filePath = buildFilePath(folder, idea.attributes.title, idea.attributes.created_at, vault);
+      const tracked = state.notes[idea.id];
+
+      if (!tracked) {
+        if (legacy.has(idea.id)) {
+          // Synced before 0.3.0, when only the id was recorded. We do not know where it
+          // went or what it said, so it cannot be updated or moved safely — but it must
+          // be remembered, or we would write the user a second copy of a note they have.
+          report.unchanged.push(idea.id);
+          continue;
+        }
+
+        const path = buildFilePath(folder, idea.attributes.title, idea.attributes.created_at, vault);
+        const content = buildMarkdown(idea);
+        await vault.create(path, content);
+        report.created.push(idea.id);
+        report.notes[idea.id] = {
+          path,
+          hash: hashContent(content),
+          updatedAt: idea.attributes.updated_at,
+        };
+        continue;
+      }
+
+      if (tracked.updatedAt === idea.attributes.updated_at) {
+        // The server sends back the row sitting exactly on the cursor, so this is the
+        // common case on a quiet sync. Answer it without touching the disk.
+        report.unchanged.push(idea.id);
+        continue;
+      }
+
+      const existing = vault.getFileByPath(tracked.path);
+      if (!existing) {
+        // Deleted or moved out from under us. Write it again where it belongs now.
+        const path = buildFilePath(folder, idea.attributes.title, idea.attributes.created_at, vault);
+        const content = buildMarkdown(idea);
+        await vault.create(path, content);
+        report.created.push(idea.id);
+        report.notes[idea.id] = {
+          path,
+          hash: hashContent(content),
+          updatedAt: idea.attributes.updated_at,
+        };
+        continue;
+      }
+
+      const onDisk = await vault.read(existing);
+      if (hashContent(onDisk) !== tracked.hash) {
+        // The user has written in this note. Their words are not reproducible from
+        // anywhere; the SpeakPen copy is. Never trade one for the other.
+        report.localEdits.push({ id: idea.id, title: idea.attributes.title, path: tracked.path });
+        continue;
+      }
+
       const content = buildMarkdown(idea);
-      await vault.create(filePath, content);
-      syncedIds.push(idea.id);
+      await vault.modify(existing, content);
+      report.updated.push(idea.id);
+      report.notes[idea.id] = {
+        path: tracked.path,
+        hash: hashContent(content),
+        updatedAt: idea.attributes.updated_at,
+      };
     } catch (error: unknown) {
-      failures.push({
+      report.failures.push({
         id: idea.id,
         title: idea.attributes.title,
         message: (error as { message?: string })?.message ?? "Unknown error",
@@ -136,5 +221,96 @@ export async function syncIdeasToVault(
     }
   }
 
-  return { syncedIds, failures };
+  report.cursor = nextCursor(ideas, report.failures, state.cursor);
+  return report;
+}
+
+/**
+ * Where to resume next time.
+ *
+ * Normally the newest change in the batch, taken across every idea rather than only the
+ * completed ones: finishing transcription bumps updated_at, so a note skipped while
+ * pending comes back on its own and does not need the cursor held open for it.
+ *
+ * A failed write is different. Its id was never recorded, so moving the cursor past it
+ * would lose it permanently — the note would be neither on disk nor ever requested
+ * again. The cursor therefore stops at the earliest failure, and since the boundary is
+ * inclusive, the next sync starts by retrying exactly that note.
+ */
+export function nextCursor(
+  ideas: APIIdea[],
+  failures: SyncFailure[],
+  fallback: string | null,
+): string | null {
+  if (failures.length > 0) {
+    const failed = new Set(failures.map((failure) => failure.id));
+    const earliest = ideas
+      .filter((idea) => failed.has(idea.id))
+      .map((idea) => idea.attributes.updated_at)
+      .sort();
+    return earliest[0] ?? fallback;
+  }
+
+  const timestamps = ideas.map((idea) => idea.attributes.updated_at).sort();
+  return timestamps[timestamps.length - 1] ?? fallback;
+}
+
+/**
+ * Move already-synced notes when the sync folder setting changes.
+ *
+ * Without this, changing the folder left every existing note behind: the old files stayed
+ * put, and because their ids were already recorded nothing recreated them in the new
+ * folder, so a user's notes ended up split across two places with no way to tell which
+ * was current. Runs once per change, driven by the folder recorded in sync state.
+ *
+ * A note the user has since moved themselves is left alone — their filing beats ours.
+ */
+export async function migrateSyncFolder(
+  notes: Record<string, SyncedNote>,
+  oldFolder: string | null,
+  newFolder: string,
+  vault: Vault,
+): Promise<{ moved: Record<string, SyncedNote>; failures: SyncFailure[] }> {
+  const moved: Record<string, SyncedNote> = {};
+  const failures: SyncFailure[] = [];
+
+  if (!oldFolder || normalizePath(oldFolder) === normalizePath(newFolder)) {
+    return { moved, failures };
+  }
+
+  const prefix = `${normalizePath(oldFolder)}/`;
+  const relocatable = Object.entries(notes).filter(([, note]) => note.path.startsWith(prefix));
+  if (relocatable.length === 0) return { moved, failures };
+
+  await ensureFolder(newFolder, vault);
+
+  for (const [id, note] of relocatable) {
+    try {
+      const file = vault.getFileByPath(note.path);
+      if (!file) continue; // Already gone; nothing to move and nothing to fix.
+
+      const basename = note.path.slice(prefix.length);
+      let target = normalizePath(`${newFolder}/${basename}`);
+      if (vault.getAbstractFileByPath(target)) {
+        // Something already occupies the name. Keep both rather than clobbering.
+        const stem = basename.replace(/\.md$/, "");
+        let counter = 1;
+        while (vault.getAbstractFileByPath(normalizePath(`${newFolder}/${stem} (${counter}).md`))) {
+          counter++;
+        }
+        target = normalizePath(`${newFolder}/${stem} (${counter}).md`);
+      }
+
+      await vault.rename(file, target);
+      moved[id] = { ...note, path: target };
+    } catch (error: unknown) {
+      failures.push({
+        id,
+        title: note.path,
+        message: (error as { message?: string })?.message ?? "Unknown error",
+      });
+    }
+  }
+
+  return { moved, failures };
 }

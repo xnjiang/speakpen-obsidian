@@ -6,14 +6,18 @@ import {
   ensureFolder,
   buildFilePath,
   syncIdeasToVault,
+  migrateSyncFolder,
+  hashContent,
+  nextCursor,
 } from "../src/sync";
+import type { SyncState } from "../src/types";
 import { makeIdea } from "./helpers";
 
 vi.mock("obsidian", () => ({
   normalizePath: (path: string) => path.replace(/\/+/g, "/"),
 }));
 
-/** Stands in for Obsidian's Vault, recording what the sync asked it to create. */
+/** Stands in for Obsidian's Vault, recording what the sync asked it to do. */
 class FakeVault {
   files = new Map<string, string>();
   folders = new Set<string>();
@@ -24,6 +28,10 @@ class FakeVault {
     if (this.files.has(path)) return { path };
     if (this.folders.has(path)) return { path };
     return null;
+  }
+
+  getFileByPath(path: string) {
+    return this.files.has(path) ? { path } : null;
   }
 
   async createFolder(path: string) {
@@ -37,6 +45,28 @@ class FakeVault {
     this.files.set(path, content);
     return { path };
   }
+
+  async read(file: { path: string }) {
+    const content = this.files.get(file.path);
+    if (content === undefined) throw new Error(`No such file: ${file.path}`);
+    return content;
+  }
+
+  async modify(file: { path: string }, content: string) {
+    if (!this.files.has(file.path)) throw new Error(`No such file: ${file.path}`);
+    this.files.set(file.path, content);
+  }
+
+  async rename(file: { path: string }, newPath: string) {
+    const content = this.files.get(file.path);
+    if (content === undefined) throw new Error(`No such file: ${file.path}`);
+    this.files.delete(file.path);
+    this.files.set(newPath, content);
+  }
+}
+
+function makeState(overrides: Partial<SyncState> = {}): SyncState {
+  return { notes: {}, legacyIds: [], cursor: null, syncFolder: null, lastSyncTime: null, ...overrides };
 }
 
 describe("sanitizeFilename", () => {
@@ -196,26 +226,118 @@ describe("buildFilePath", () => {
   });
 });
 
+
 describe("syncIdeasToVault", () => {
-  it("writes one file per idea into a nested folder", async () => {
+  it("creates a note and records where it went", async () => {
     const vault = new FakeVault();
-    const ideas = [
-      makeIdea({ id: "1", attributes: { title: "First" } as any }),
-      makeIdea({ id: "2", attributes: { title: "Second" } as any }),
-    ];
+    const idea = makeIdea({ id: "1", attributes: { title: "First" } as any });
 
-    const { syncedIds, failures } = await syncIdeasToVault(ideas, "Notes/Voice", vault as any);
+    const report = await syncIdeasToVault([idea], "Notes/Voice", vault as any, makeState());
 
-    expect(syncedIds).toEqual(["1", "2"]);
-    expect(failures).toEqual([]);
-    expect(vault.folders).toContain("Notes");
-    expect(vault.folders).toContain("Notes/Voice");
-    expect([...vault.files.keys()].every((p) => p.startsWith("Notes/Voice/"))).toBe(true);
+    expect(report.created).toEqual(["1"]);
+    expect(report.notes["1"].path).toBe("Notes/Voice/First - 2026-03-28.md");
+    expect(report.notes["1"].updatedAt).toBe("2026-03-28T10:00:00Z");
+    expect(vault.folders.has("Notes")).toBe(true);
   });
 
-  // 这条锁住的是审核里发现的重复 bug：以前一条写失败会中断整批，已经落盘的那几条
-  // 因为 id 没被记录，下次同步会被当成新笔记，再写一份 " (1)"。
-  it("reports the ideas it wrote even when one of them fails", async () => {
+  it("skips notes that are not finished transcribing", async () => {
+    const vault = new FakeVault();
+    const ideas = [
+      makeIdea({ id: "1", attributes: { status: "completed" } as any }),
+      makeIdea({ id: "2", attributes: { status: "processing" } as any }),
+    ];
+
+    const report = await syncIdeasToVault(ideas, "SpeakPen", vault as any, makeState());
+
+    expect(report.created).toEqual(["1"]);
+    expect(vault.files.size).toBe(1);
+  });
+
+  // 这是「改了不回流」的正解：服务端 updated_at 变了，就把文件改写成新内容。
+  it("rewrites a note when SpeakPen's copy has changed", async () => {
+    const vault = new FakeVault();
+    const original = makeIdea({ id: "1", attributes: { title: "Note", message: "old" } as any });
+
+    const first = await syncIdeasToVault([original], "SpeakPen", vault as any, makeState());
+    const path = first.notes["1"].path;
+
+    const edited = makeIdea({
+      id: "1",
+      attributes: { title: "Note", message: "new text", updated_at: "2026-03-29T10:00:00Z" } as any,
+    });
+    const report = await syncIdeasToVault([edited], "SpeakPen", vault as any,
+      makeState({ notes: first.notes }));
+
+    expect(report.updated).toEqual(["1"]);
+    expect(vault.files.size).toBe(1);
+    expect(vault.files.get(path)).toContain("new text");
+    expect(report.notes["1"].updatedAt).toBe("2026-03-29T10:00:00Z");
+  });
+
+  // 用户自己在 Obsidian 里写的东西没有别处可恢复，SpeakPen 那份有。绝不拿前者换后者。
+  it("refuses to overwrite a note the user has edited in the vault", async () => {
+    const vault = new FakeVault();
+    const original = makeIdea({ id: "1", attributes: { title: "Note", message: "old" } as any });
+
+    const first = await syncIdeasToVault([original], "SpeakPen", vault as any, makeState());
+    const path = first.notes["1"].path;
+    vault.files.set(path, "my own notes on top of this");
+
+    const edited = makeIdea({
+      id: "1",
+      attributes: { title: "Note", message: "server text", updated_at: "2026-03-29T10:00:00Z" } as any,
+    });
+    const report = await syncIdeasToVault([edited], "SpeakPen", vault as any,
+      makeState({ notes: first.notes }));
+
+    expect(report.updated).toEqual([]);
+    expect(report.localEdits).toHaveLength(1);
+    expect(report.localEdits[0].path).toBe(path);
+    expect(vault.files.get(path)).toBe("my own notes on top of this");
+  });
+
+  it("does no disk work when nothing changed server-side", async () => {
+    const vault = new FakeVault();
+    const idea = makeIdea({ id: "1" });
+    const first = await syncIdeasToVault([idea], "SpeakPen", vault as any, makeState());
+
+    const report = await syncIdeasToVault([idea], "SpeakPen", vault as any,
+      makeState({ notes: first.notes }));
+
+    expect(report.unchanged).toEqual(["1"]);
+    expect(report.created).toEqual([]);
+    expect(report.updated).toEqual([]);
+  });
+
+  it("writes a note again if it has vanished from the vault", async () => {
+    const vault = new FakeVault();
+    const idea = makeIdea({ id: "1" });
+    const first = await syncIdeasToVault([idea], "SpeakPen", vault as any, makeState());
+    vault.files.delete(first.notes["1"].path);
+
+    const changed = makeIdea({ id: "1", attributes: { updated_at: "2026-03-29T10:00:00Z" } as any });
+    const report = await syncIdeasToVault([changed], "SpeakPen", vault as any,
+      makeState({ notes: first.notes }));
+
+    expect(report.created).toEqual(["1"]);
+    expect(vault.files.size).toBe(1);
+  });
+
+  // 0.3.0 之前只记了 id，不知道文件在哪、内容是什么。不能更新，但必须记得，
+  // 否则升级后第一次同步会把用户已有的每条笔记再写一份。
+  it("does not duplicate notes synced by an older version", async () => {
+    const vault = new FakeVault();
+    const idea = makeIdea({ id: "1" });
+
+    const report = await syncIdeasToVault([idea], "SpeakPen", vault as any,
+      makeState({ legacyIds: ["1"] }));
+
+    expect(report.created).toEqual([]);
+    expect(report.unchanged).toEqual(["1"]);
+    expect(vault.files.size).toBe(0);
+  });
+
+  it("keeps going when one note cannot be written", async () => {
     const vault = new FakeVault();
     const realCreate = vault.create.bind(vault);
     vault.create = async (path: string, content: string) => {
@@ -229,55 +351,105 @@ describe("syncIdeasToVault", () => {
       makeIdea({ id: "3", attributes: { title: "Also fine" } as any }),
     ];
 
-    const { syncedIds, failures } = await syncIdeasToVault(ideas, "SpeakPen", vault as any);
+    const report = await syncIdeasToVault(ideas, "SpeakPen", vault as any, makeState());
 
-    // 失败的那条不该拖垮它后面的
-    expect(syncedIds).toEqual(["1", "3"]);
-    expect(failures).toHaveLength(1);
-    expect(failures[0].id).toBe("2");
-    expect(failures[0].title).toBe("Broken");
-    expect(failures[0].message).toBe("disk on fire");
-    expect(vault.files.size).toBe(2);
+    expect(report.created).toEqual(["1", "3"]);
+    expect(report.failures).toHaveLength(1);
+    expect(report.failures[0].id).toBe("2");
   });
+});
 
-  it("does not duplicate an already written note when a later sync retries", async () => {
-    const vault = new FakeVault();
-    const ideas = [makeIdea({ id: "1", attributes: { title: "Once only" } as any })];
-
-    const first = await syncIdeasToVault(ideas, "SpeakPen", vault as any);
-    expect(first.syncedIds).toEqual(["1"]);
-
-    // 调用方把返回的 id 记进 syncedIds 之后，这条就不会再进入下一轮的候选集
-    const remaining = getNewIdeas(ideas, new Set(first.syncedIds));
-    expect(remaining).toEqual([]);
-    expect(vault.files.size).toBe(1);
-  });
-
-  it("creates the folder once, not once per idea", async () => {
-    const vault = new FakeVault();
-    const ideas = Array.from({ length: 5 }, (_, i) =>
-      makeIdea({ id: String(i), attributes: { title: `Note ${i}` } as any }),
-    );
-
-    await syncIdeasToVault(ideas, "SpeakPen", vault as any);
-
-    expect(vault.createFolderCalls).toEqual(["SpeakPen"]);
-  });
-
-  it("gives colliding titles distinct filenames instead of overwriting", async () => {
-    const vault = new FakeVault();
+describe("nextCursor", () => {
+  it("advances to the newest change in the batch", () => {
     const ideas = [
-      makeIdea({ id: "1", attributes: { title: "Standup" } as any }),
-      makeIdea({ id: "2", attributes: { title: "Standup" } as any }),
+      makeIdea({ id: "1", attributes: { updated_at: "2026-03-28T10:00:00Z" } as any }),
+      makeIdea({ id: "2", attributes: { updated_at: "2026-03-29T10:00:00Z" } as any }),
     ];
 
-    const { syncedIds } = await syncIdeasToVault(ideas, "SpeakPen", vault as any);
+    expect(nextCursor(ideas, [], null)).toBe("2026-03-29T10:00:00Z");
+  });
 
-    expect(syncedIds).toEqual(["1", "2"]);
-    expect(vault.files.size).toBe(2);
-    expect([...vault.files.keys()]).toEqual([
-      "SpeakPen/Standup - 2026-03-28.md",
-      "SpeakPen/Standup - 2026-03-28 (1).md",
-    ]);
+  // 失败的那条 id 没被记录。游标若越过它，它既不在磁盘上、也再不会被请求——永久丢失。
+  it("stops at the earliest failure so it gets retried", () => {
+    const ideas = [
+      makeIdea({ id: "1", attributes: { updated_at: "2026-03-28T10:00:00Z" } as any }),
+      makeIdea({ id: "2", attributes: { updated_at: "2026-03-29T10:00:00Z" } as any }),
+      makeIdea({ id: "3", attributes: { updated_at: "2026-03-30T10:00:00Z" } as any }),
+    ];
+    const failures = [{ id: "2", title: "Broken", message: "nope" }];
+
+    expect(nextCursor(ideas, failures, null)).toBe("2026-03-29T10:00:00Z");
+  });
+
+  it("advances past notes still being transcribed", () => {
+    // 转写完成会更新 updated_at，所以未完成的笔记会自己回来，不必为它把游标钉住。
+    const ideas = [
+      makeIdea({ id: "1", attributes: { status: "completed", updated_at: "2026-03-28T10:00:00Z" } as any }),
+      makeIdea({ id: "2", attributes: { status: "processing", updated_at: "2026-03-29T10:00:00Z" } as any }),
+    ];
+
+    expect(nextCursor(ideas, [], null)).toBe("2026-03-29T10:00:00Z");
+  });
+
+  it("keeps the old cursor when the batch is empty", () => {
+    expect(nextCursor([], [], "2026-03-28T10:00:00Z")).toBe("2026-03-28T10:00:00Z");
+  });
+});
+
+describe("migrateSyncFolder", () => {
+  it("moves tracked notes when the folder setting changes", async () => {
+    const vault = new FakeVault();
+    vault.files.set("Old/Note - 2026-03-28.md", "content");
+    const notes = {
+      "1": { path: "Old/Note - 2026-03-28.md", hash: hashContent("content"), updatedAt: "x" },
+    };
+
+    const { moved, failures } = await migrateSyncFolder(notes, "Old", "New", vault as any);
+
+    expect(failures).toEqual([]);
+    expect(moved["1"].path).toBe("New/Note - 2026-03-28.md");
+    expect(vault.files.has("New/Note - 2026-03-28.md")).toBe(true);
+    expect(vault.files.has("Old/Note - 2026-03-28.md")).toBe(false);
+  });
+
+  it("does nothing when the folder has not changed", async () => {
+    const vault = new FakeVault();
+    vault.files.set("SpeakPen/Note.md", "content");
+    const notes = { "1": { path: "SpeakPen/Note.md", hash: "h", updatedAt: "x" } };
+
+    const { moved } = await migrateSyncFolder(notes, "SpeakPen", "SpeakPen", vault as any);
+
+    expect(moved).toEqual({});
+    expect(vault.files.has("SpeakPen/Note.md")).toBe(true);
+  });
+
+  it("does nothing on a vault that has never synced", async () => {
+    const vault = new FakeVault();
+    const { moved } = await migrateSyncFolder({}, null, "SpeakPen", vault as any);
+    expect(moved).toEqual({});
+  });
+
+  it("leaves a note the user has moved themselves alone", async () => {
+    const vault = new FakeVault();
+    // 记录里说在 Old/，实际用户自己挪走了。
+    const notes = { "1": { path: "Old/Gone.md", hash: "h", updatedAt: "x" } };
+
+    const { moved, failures } = await migrateSyncFolder(notes, "Old", "New", vault as any);
+
+    expect(moved).toEqual({});
+    expect(failures).toEqual([]);
+  });
+
+  it("keeps both notes when the destination name is taken", async () => {
+    const vault = new FakeVault();
+    vault.files.set("Old/Note.md", "ours");
+    vault.files.set("New/Note.md", "someone else's");
+    const notes = { "1": { path: "Old/Note.md", hash: "h", updatedAt: "x" } };
+
+    const { moved } = await migrateSyncFolder(notes, "Old", "New", vault as any);
+
+    expect(moved["1"].path).toBe("New/Note (1).md");
+    expect(vault.files.get("New/Note.md")).toBe("someone else's");
+    expect(vault.files.get("New/Note (1).md")).toBe("ours");
   });
 });

@@ -6,10 +6,19 @@ const BASE_URL = "https://speakpen.app/api/v1";
 export class SpeakPenAPI {
   constructor(private token: string) {}
 
-  async fetchIdeasPage(page: number): Promise<IdeasResponse> {
+  /**
+   * @param updatedSince ISO8601 cursor. When given, the server returns only notes
+   *   changed at or after it, ordered oldest-change-first. Omitted on a first sync.
+   */
+  async fetchIdeasPage(page: number, updatedSince?: string | null): Promise<IdeasResponse> {
+    const params = [`page=${page}`, "per_page=50"];
+    if (updatedSince) {
+      params.push(`updated_since=${encodeURIComponent(updatedSince)}`);
+    }
+
     try {
       const response = await requestUrl({
-        url: `${BASE_URL}/ideas?page=${page}&per_page=50`,
+        url: `${BASE_URL}/ideas?${params.join("&")}`,
         method: "GET",
         headers: {
           Authorization: `Bearer ${this.token}`,
@@ -26,12 +35,19 @@ export class SpeakPenAPI {
     }
   }
 
-  async fetchAllIdeas(): Promise<APIIdea[]> {
+  /**
+   * Every note changed at or after `updatedSince`, across all pages.
+   *
+   * Passing a cursor is what keeps a routine sync cheap: without one this walks the
+   * user's entire history every run, which for a large vault is dozens of requests
+   * every few minutes to learn that nothing happened.
+   */
+  async fetchIdeasSince(updatedSince: string | null): Promise<APIIdea[]> {
     const allIdeas: APIIdea[] = [];
     let page = 1;
 
     while (true) {
-      const response = await this.fetchIdeasPage(page);
+      const response = await this.fetchIdeasPage(page, updatedSince);
       allIdeas.push(...response.data);
 
       const nextPage = response.meta.next_page;

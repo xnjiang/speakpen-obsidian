@@ -25,7 +25,7 @@ describe("SpeakPenAPI", () => {
     const stuck = makeIdeasResponse([makeIdea()], { next_page: 1 });
     mockRequestUrl.mockResolvedValue({ status: 200, json: stuck } as any);
 
-    await expect(api.fetchAllIdeas()).rejects.toThrow("Pagination did not advance");
+    await expect(api.fetchIdeasSince(null)).rejects.toThrow("Pagination did not advance");
   });
 
   it("fetches a single page of ideas", async () => {
@@ -61,12 +61,37 @@ describe("SpeakPenAPI", () => {
         json: makeIdeasResponse([idea2], { current_page: 2, next_page: null, total_pages: 2 }),
       } as any);
 
-    const ideas = await api.fetchAllIdeas();
+    const ideas = await api.fetchIdeasSince(null);
 
     expect(mockRequestUrl).toHaveBeenCalledTimes(2);
     expect(ideas).toHaveLength(2);
     expect(ideas[0].id).toBe("idea-1");
     expect(ideas[1].id).toBe("idea-2");
+  });
+
+  // 这条是整个增量同步省下请求的关键：游标没上到 query string 上，
+  // 服务端就会照旧返回全量，插件却以为自己在做增量。
+  it("sends the cursor as updated_since", async () => {
+    mockRequestUrl.mockResolvedValueOnce({
+      status: 200,
+      json: makeIdeasResponse([makeIdea()]),
+    } as any);
+
+    await api.fetchIdeasSince("2026-03-28T10:00:00Z");
+
+    const url = mockRequestUrl.mock.calls[0][0].url;
+    expect(url).toContain("updated_since=2026-03-28T10%3A00%3A00Z");
+  });
+
+  it("omits updated_since on a first sync so the whole history arrives", async () => {
+    mockRequestUrl.mockResolvedValueOnce({
+      status: 200,
+      json: makeIdeasResponse([makeIdea()]),
+    } as any);
+
+    await api.fetchIdeasSince(null);
+
+    expect(mockRequestUrl.mock.calls[0][0].url).not.toContain("updated_since");
   });
 
   it("throws on 401 unauthorized", async () => {

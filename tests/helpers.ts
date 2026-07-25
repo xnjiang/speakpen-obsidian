@@ -9,6 +9,7 @@ export function makeIdea(overrides: Partial<APIIdea & { attributes: Partial<APII
       message: "This is a summary.",
       transcript_text: "This is the transcript.",
       created_at: "2026-03-28T10:00:00Z",
+      updated_at: "2026-03-28T10:00:00Z",
       category: "Meeting",
       audio_url: "https://speakpen.app/audio/test.m4a",
       status: "completed",

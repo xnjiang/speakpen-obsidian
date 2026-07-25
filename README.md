@@ -4,10 +4,15 @@ Sync your [SpeakPen](https://speakpen.app) voice summaries into your vault as Ma
 
 ## Features
 
-- **Auto Sync** — Automatically pulls new ideas from SpeakPen on a configurable interval
-- **Manual Sync** — Trigger sync from the ribbon icon or command palette
+- **Incremental Sync** — Asks SpeakPen only what changed since last time, so a routine sync
+  costs one request no matter how many notes you have
+- **Edits Flow Through** — Rename or re-transcribe a note in SpeakPen and the note in your
+  vault is brought up to date, instead of drifting out of sync forever
+- **Your Edits Win** — A note you have written in is never overwritten. The plugin notices
+  and leaves it alone
+- **Auto Sync** — Runs on a configurable interval; manual sync from the ribbon or command palette
 - **Markdown Notes** — Each idea becomes a Markdown file with YAML frontmatter
-- **Smart Dedup** — Only syncs new ideas; never overwrites existing notes
+- **Follows Your Folder** — Change the sync folder and existing notes move with it
 - **Status Bar** — Shows last sync time at a glance
 
 ## Setup
@@ -19,8 +24,23 @@ Sync your [SpeakPen](https://speakpen.app) voice summaries into your vault as Ma
 4. Configure sync folder and interval as needed
 
 Audio is intentionally not linked from the note: the API hands out presigned URLs that
-expire within hours, and a note is written once and never rewritten, so the link would be
-dead by the next day. Use `speakpen_id` to find the recording back in SpeakPen.
+expire within hours, so the link would be dead by the next day. Use `speakpen_id` to find
+the recording back in SpeakPen.
+
+## How syncing decides what to do
+
+The plugin remembers where it put each note and what it wrote there.
+
+- **New in SpeakPen** — written to your sync folder.
+- **Changed in SpeakPen** — the note in your vault is updated in place.
+- **Changed in SpeakPen, but you have edited it here** — left exactly as you have it. Your
+  writing is not recoverable from anywhere else; the SpeakPen copy is. A notice tells you
+  which notes were skipped so you can reconcile them yourself if you want to.
+- **Deleted from your vault** — written again on its next change.
+
+Notes synced by versions before 0.3.0 are remembered so they are never duplicated, but they
+cannot be updated or moved: those versions recorded only an id, so the plugin does not know
+where those notes went or whether you have since rewritten them.
 
 ## About your API token
 

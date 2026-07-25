@@ -1,5 +1,5 @@
 import { Vault, normalizePath } from "obsidian";
-import { APIIdea } from "./types";
+import { APIIdea, SyncFailure, SyncResult } from "./types";
 
 /** Remove characters that are invalid in filenames */
 export function sanitizeFilename(name: string): string {
@@ -66,24 +66,75 @@ export function buildFilePath(folder: string, title: string, date: string, vault
   return candidate;
 }
 
-/** Create idea files in the vault. Returns count of created files. */
+/**
+ * Create the sync folder, including any missing parent folders.
+ *
+ * A nested sync folder such as `Notes/Voice` used to be created with a single
+ * createFolder call. Obsidian's API contract only promises to "create a new folder"
+ * and says nothing about intermediate levels, so that relied on unspecified behaviour:
+ * if the parent did not exist, the first sync of a fresh vault would throw and the
+ * user would see nothing but "Sync failed". Walking the path makes it work either way.
+ *
+ * createFolder throws when the folder already exists, and check-then-create is not
+ * atomic against a vault index that can lag the filesystem, so a failure here is not
+ * conclusive. Folder creation is treated as best effort: vault.create below is the
+ * authoritative point of failure, and it names the file it could not write.
+ */
+export async function ensureFolder(folder: string, vault: Vault): Promise<void> {
+  const parts = normalizePath(folder).split("/").filter((part) => part.length > 0);
+
+  let current = "";
+  for (const part of parts) {
+    current = current ? `${current}/${part}` : part;
+    if (vault.getAbstractFileByPath(current)) continue;
+
+    try {
+      await vault.createFolder(current);
+    } catch {
+      // Already there — carry on and let file creation report any real problem.
+    }
+  }
+}
+
+/**
+ * Write each idea into the vault.
+ *
+ * Reports which ideas were written rather than just how many, because the caller
+ * records those ids as synced. Letting one bad note abort the batch used to lose that
+ * information for the notes already on disk: their ids were never recorded, so the next
+ * run treated them as new and buildFilePath gave them ` (1)` names — a failed sync
+ * silently duplicated everything it had managed to write. A note that cannot be written
+ * is therefore collected and skipped, not thrown, and the ones that succeeded are always
+ * reported back.
+ *
+ * Writes are sequential on purpose. buildFilePath resolves collisions by asking the vault
+ * what already exists, which only works if the previous file is on disk before the next
+ * path is chosen; running these concurrently would let two notes pick the same name.
+ */
 export async function syncIdeasToVault(
   ideas: APIIdea[],
   folder: string,
   vault: Vault,
-): Promise<number> {
-  // Ensure folder exists
-  if (!vault.getAbstractFileByPath(normalizePath(folder))) {
-    await vault.createFolder(normalizePath(folder));
-  }
+): Promise<SyncResult> {
+  await ensureFolder(folder, vault);
 
-  let created = 0;
+  const syncedIds: string[] = [];
+  const failures: SyncFailure[] = [];
+
   for (const idea of ideas) {
-    const filePath = buildFilePath(folder, idea.attributes.title, idea.attributes.created_at, vault);
-    const content = buildMarkdown(idea);
-    await vault.create(filePath, content);
-    created++;
+    try {
+      const filePath = buildFilePath(folder, idea.attributes.title, idea.attributes.created_at, vault);
+      const content = buildMarkdown(idea);
+      await vault.create(filePath, content);
+      syncedIds.push(idea.id);
+    } catch (error: unknown) {
+      failures.push({
+        id: idea.id,
+        title: idea.attributes.title,
+        message: (error as { message?: string })?.message ?? "Unknown error",
+      });
+    }
   }
 
-  return created;
+  return { syncedIds, failures };
 }

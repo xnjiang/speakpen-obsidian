@@ -112,18 +112,30 @@ export default class SpeakPenPlugin extends Plugin {
       if (newIdeas.length === 0) {
         if (!silent) new Notice("No new ideas to sync.");
       } else {
-        const count = await syncIdeasToVault(
+        const { syncedIds, failures } = await syncIdeasToVault(
           newIdeas,
           this.settings.syncFolder,
           this.app.vault,
         );
 
-        // Track synced IDs
-        for (const idea of newIdeas) {
-          this.syncState.syncedIds.push(idea.id);
+        // Record only what actually reached the vault. Marking the whole batch synced
+        // would strand any note that failed; recording nothing would re-create the ones
+        // that succeeded under a " (1)" name on the next run.
+        for (const id of syncedIds) {
+          this.syncState.syncedIds.push(id);
         }
 
-        new Notice(`Synced ${count} new idea${count > 1 ? "s" : ""}.`);
+        const count = syncedIds.length;
+        if (failures.length > 0) {
+          for (const failure of failures) {
+            console.error(`SpeakPen: could not write "${failure.title}" — ${failure.message}`);
+          }
+          new Notice(
+            `Synced ${count} of ${newIdeas.length} ideas. ${failures.length} failed — see the console for details.`,
+          );
+        } else if (count > 0) {
+          new Notice(`Synced ${count} new idea${count > 1 ? "s" : ""}.`);
+        }
       }
 
       this.syncState.lastSyncTime = new Date().toISOString();

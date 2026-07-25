@@ -34,10 +34,18 @@ export class SpeakPenAPI {
       const response = await this.fetchIdeasPage(page);
       allIdeas.push(...response.data);
 
-      if (response.meta.next_page === null) {
+      const nextPage = response.meta.next_page;
+      if (nextPage === null) {
         break;
       }
-      page = response.meta.next_page;
+
+      // The cursor has to move forward. A next_page that repeats or goes backwards
+      // would otherwise loop here indefinitely, growing allIdeas without bound and
+      // leaving isSyncing stuck true so no later sync could start.
+      if (nextPage <= page) {
+        throw new Error(`Pagination did not advance past page ${page}`);
+      }
+      page = nextPage;
     }
 
     return allIdeas;

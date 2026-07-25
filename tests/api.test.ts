@@ -19,6 +19,15 @@ describe("SpeakPenAPI", () => {
     vi.clearAllMocks();
   });
 
+  it("gives up when pagination stops advancing", async () => {
+    // 服务端若把 next_page 报成同一页，旧写法会无限循环、内存无上限增长，
+    // 而且 isSyncing 一直卡在 true，之后再也不会有同步启动。
+    const stuck = makeIdeasResponse([makeIdea()], { next_page: 1 });
+    mockRequestUrl.mockResolvedValue({ status: 200, json: stuck } as any);
+
+    await expect(api.fetchAllIdeas()).rejects.toThrow("Pagination did not advance");
+  });
+
   it("fetches a single page of ideas", async () => {
     const idea = makeIdea();
     const response = makeIdeasResponse([idea]);

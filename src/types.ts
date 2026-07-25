@@ -63,3 +63,21 @@ export interface IdeasResponse {
   data: APIIdea[];
   meta: PaginationMeta;
 }
+
+/** An idea that could not be written to the vault */
+export interface SyncFailure {
+  id: string;
+  title: string;
+  message: string;
+}
+
+/**
+ * Outcome of one sync pass.
+ *
+ * `syncedIds` is what actually reached the vault, and is what the caller records as
+ * synced — recording the requested ids instead would mark unwritten notes as done.
+ */
+export interface SyncResult {
+  syncedIds: string[];
+  failures: SyncFailure[];
+}

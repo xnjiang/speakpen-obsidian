@@ -14,9 +14,8 @@ Sync your [SpeakPen](https://speakpen.app) voice summaries into your vault as Ma
 
 1. In Obsidian, go to **Settings → Community plugins → Browse**, search for "SpeakPen Sync", and install it
 2. Enable it, then go to **Settings → SpeakPen Sync**
-3. Paste your API token. Generate one in the SpeakPen **web app** at
-   [speakpen.app/app](https://speakpen.app/app) → **Settings → API Tokens** — tokens are
-   issued on the web, not in the iOS app
+3. Paste your API token. Generate one in the SpeakPen web app at
+   [speakpen.app/app](https://speakpen.app/app), under **Settings → API Tokens**
 4. Configure sync folder and interval as needed
 
 Audio is intentionally not linked from the note: the API hands out presigned URLs that

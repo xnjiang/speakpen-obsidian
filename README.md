@@ -6,8 +6,9 @@ Sync your [SpeakPen](https://speakpen.app) voice summaries into your vault as Ma
 
 - **Incremental Sync** — Asks SpeakPen only what changed since last time, so a routine sync
   costs one request no matter how many notes you have
-- **Edits Flow Through** — Rename or re-transcribe a note in SpeakPen and the note in your
-  vault is brought up to date, instead of drifting out of sync forever
+- **Edits Flow Through** — Re-transcribe or edit a note in SpeakPen and the note in your
+  vault is rewritten in place, instead of drifting out of sync forever. The file keeps the
+  name it was created with, even if you rename the note in SpeakPen
 - **Your Edits Win** — A note you have written in is never overwritten. The plugin notices
   and leaves it alone
 - **Auto Sync** — Runs on a configurable interval; manual sync from the ribbon or command palette
@@ -36,7 +37,10 @@ The plugin remembers where it put each note and what it wrote there.
 - **Changed in SpeakPen, but you have edited it here** — left exactly as you have it. Your
   writing is not recoverable from anywhere else; the SpeakPen copy is. A notice tells you
   which notes were skipped so you can reconcile them yourself if you want to.
-- **Deleted from your vault** — written again on its next change.
+- **Deleted, moved, or renamed by you** — the plugin looks for a note where it put it, so
+  any of these look the same to it: the note is gone. A fresh copy is written to your sync
+  folder on that note's next change. If you moved it rather than deleted it, you end up
+  with both.
 
 Notes synced by versions before 0.3.0 are remembered so they are never duplicated, but they
 cannot be updated or moved: those versions recorded only an id, so the plugin does not know

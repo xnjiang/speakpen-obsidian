@@ -2,6 +2,20 @@
 
 Sync your [SpeakPen](https://speakpen.app) voice summaries into your vault as Markdown notes.
 
+## What this plugin needs
+
+- **A SpeakPen account.** The plugin is a client for [SpeakPen](https://speakpen.app), where
+  your voice notes are recorded and transcribed. It does nothing on its own — without an
+  account there is nothing for it to sync.
+- **A paid plan for full use.** The free plan covers 3 recordings a month, up to 5 minutes
+  each. Pro is $9.90/month for 60 recordings a month, up to 20 minutes each. The plugin
+  itself is free and does not limit anything.
+- **Network access to `speakpen.app`.** On each sync the plugin makes read-only `GET`
+  requests to `https://speakpen.app/api/v1/ideas`, authenticated with your API token, to
+  fetch notes that changed since the last sync. That is the only host it contacts, and the
+  only thing it asks for. It never sends your vault anywhere, never writes back to SpeakPen,
+  and collects no telemetry. See [Privacy Policy](https://speakpen.app/privacy).
+
 ## Features
 
 - **Incremental Sync** — Asks SpeakPen only what changed since last time, so a routine sync

@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - run: npm ci
+
+      # tests/landing-claims.test.ts reads config/product_claims.json from the
+      # speakpen repo to check that every public claim about sync still names a
+      # test that exists here. Without that checkout it warns and skips, which
+      # would quietly disable the one guard that spans the two repos.
+      - name: Check out the site repo so the claims guard can run
+        uses: actions/checkout@v4
+        with:
+          repository: xnjiang/speakpen
+          path: .speakpen-site
+
+      - run: npm test
+        env:
+          SPEAKPEN_RAILS_REPO: ${{ github.workspace }}/.speakpen-site
+
+      - run: npm run build

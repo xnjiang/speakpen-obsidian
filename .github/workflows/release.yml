@@ -1,0 +1,79 @@
+name: Release
+
+# Obsidian installs a plugin by downloading the assets attached to the GitHub
+# release whose tag equals the `version` in manifest.json. Building and
+# uploading those by hand is how you end up shipping a stale main.js, or a tag
+# that does not match the manifest and therefore installs for nobody.
+on:
+  push:
+    tags: ["[0-9]+.[0-9]+.[0-9]+"]
+
+permissions:
+  contents: write # create the release and upload assets
+  id-token: write # mint the provenance token
+  attestations: write # record the attestation
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - run: npm ci
+
+      # A tag that disagrees with manifest.json produces a release Obsidian
+      # will never offer: the directory reads the manifest for the version,
+      # then looks for a release tagged exactly that. Fail loudly here rather
+      # than silently publishing something uninstallable.
+      - name: Tag must match manifest.json version
+        run: |
+          manifest_version=$(node -p "require('./manifest.json').version")
+          if [ "$GITHUB_REF_NAME" != "$manifest_version" ]; then
+            echo "tag is $GITHUB_REF_NAME but manifest.json says $manifest_version" >&2
+            exit 1
+          fi
+
+      # versions.json maps each plugin version to the minimum Obsidian it runs
+      # on. 0.3.0 shipped claiming 1.4.0 while actually needing 1.5.7, so older
+      # Obsidian was offered a build it could not run. Never again silently.
+      - name: versions.json must cover this version, consistently with the manifest
+        run: |
+          manifest_min=$(node -p "require('./manifest.json').minAppVersion")
+          declared=$(node -p "require('./versions.json')[require('./manifest.json').version] ?? ''")
+          if [ -z "$declared" ]; then
+            echo "versions.json has no entry for $GITHUB_REF_NAME" >&2
+            exit 1
+          fi
+          if [ "$declared" != "$manifest_min" ]; then
+            echo "versions.json says $declared for $GITHUB_REF_NAME, manifest says $manifest_min" >&2
+            exit 1
+          fi
+
+      - run: npm test
+
+      - run: npm run build
+
+      # Proves main.js was built from this repo at this commit, so users can
+      # verify the asset's provenance rather than trusting an upload.
+      - uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: main.js
+
+      # Only main.js and manifest.json — the review flags anything else as an
+      # unsupported extra, and Obsidian would not download it anyway.
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" main.js manifest.json --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" main.js manifest.json \
+              --title "$GITHUB_REF_NAME" \
+              --generate-notes
+          fi

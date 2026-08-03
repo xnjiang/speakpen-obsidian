@@ -115,6 +115,22 @@ npm run build  # production build
 npm test       # run tests
 ```
 
+### Changing sync behaviour
+
+speakpen.app describes what this plugin does, in four languages. Those descriptions
+are listed in `config/product_claims.json` in the [speakpen](https://github.com/xnjiang/speakpen)
+repo, and each one names a test **in this repo** that proves it.
+`tests/landing-claims.test.ts` checks that those tests still exist, so `npm test` fails
+here if you delete or rename one — and the test itself fails if you change the behaviour
+it proves.
+
+This exists because the two repos drifted once: `faee134` corrected a claim in this
+README that the site kept making for another week, with both test suites green. If you
+add a claim to the site, write the test that proves it here first.
+
+Check out the `speakpen` repo alongside this one, or set `SPEAKPEN_RAILS_REPO`. Without
+it the check prints a warning and skips rather than failing.
+
 ## License
 
 MIT

@@ -274,6 +274,34 @@ describe("syncIdeasToVault", () => {
     expect(report.notes["1"].updatedAt).toBe("2026-03-29T10:00:00Z");
   });
 
+// 落地页和 README 都声明「在 SpeakPen 里改名，仓库里那份保持原文件名、只换内容」。
+// 上面那条 rewrites 测试两次用的是同一个标题，证明不到这一点——改名这条路径
+// 此前没有任何测试覆盖，而它正是 2026-07-26 faee134 修正 README 时争的那句话。
+// 依据：更新分支走 vault.modify(existing) 并记回 tracked.path，buildFilePath
+// 只在两条创建分支上调用，所以标题变了也不会生成新文件名。
+it("keeps the original filename when the note is renamed in SpeakPen", async () => {
+  const vault = new FakeVault();
+  const original = makeIdea({ id: "1", attributes: { title: "Old Title", message: "old" } as any });
+
+  const first = await syncIdeasToVault([original], "SpeakPen", vault as any, makeState());
+  const originalPath = first.notes["1"].path;
+  expect(originalPath).toContain("Old Title");
+
+  const renamed = makeIdea({
+    id: "1",
+    attributes: { title: "Brand New Title", message: "new text", updated_at: "2026-03-29T10:00:00Z" } as any,
+  });
+  const report = await syncIdeasToVault([renamed], "SpeakPen", vault as any,
+    makeState({ notes: first.notes }));
+
+  // 内容更新了，但文件名和路径都没动，也没有多出一个以新标题命名的文件。
+  expect(report.updated).toEqual(["1"]);
+  expect(vault.files.size).toBe(1);
+  expect([...vault.files.keys()]).toEqual([originalPath]);
+  expect(vault.files.get(originalPath)).toContain("new text");
+  expect(report.notes["1"].path).toBe(originalPath);
+});
+
   // 用户自己在 Obsidian 里写的东西没有别处可恢复，SpeakPen 那份有。绝不拿前者换后者。
   it("refuses to overwrite a note the user has edited in the vault", async () => {
     const vault = new FakeVault();

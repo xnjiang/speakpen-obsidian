@@ -94,6 +94,23 @@ describe("SpeakPenAPI", () => {
     expect(mockRequestUrl.mock.calls[0][0].url).not.toContain("updated_since");
   });
 
+// 落地页在四种语言里都声明「插件只把 SpeakPen 的改动带进仓库，反方向不会」。
+// 支撑它的事实是 api.ts 只有一个出口且写死 method: "GET"——但此前没有测试
+// 钉住这一点，加一条写操作就能悄悄让那句话变成假话，而全套件照常绿。
+it("only ever issues GET requests, so nothing is pushed back to SpeakPen", async () => {
+  const response = makeIdeasResponse([makeIdea()]);
+  mockRequestUrl.mockResolvedValue({ status: 200, json: response } as any);
+
+  await api.fetchIdeasSince(null);
+  await api.fetchIdeasSince("2026-03-28T10:00:00Z");
+
+  expect(mockRequestUrl).toHaveBeenCalled();
+  for (const [options] of mockRequestUrl.mock.calls) {
+    expect((options as any).method).toBe("GET");
+    expect((options as any).body).toBeUndefined();
+  }
+});
+
   it("throws on 401 unauthorized", async () => {
     mockRequestUrl.mockRejectedValueOnce({ status: 401 });
 

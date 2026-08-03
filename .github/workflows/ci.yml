@@ -19,14 +19,37 @@ jobs:
       - run: npm ci
 
       # tests/landing-claims.test.ts reads config/product_claims.json from the
-      # speakpen repo to check that every public claim about sync still names a
-      # test that exists here. Without that checkout it warns and skips, which
-      # would quietly disable the one guard that spans the two repos.
+      # speakpen repo, to check that every public claim the site makes about
+      # sync still names a test that exists here.
+      #
+      # That repo is private, so the default GITHUB_TOKEN cannot see it and
+      # this step fails with "Not Found". It is allowed to fail: without the
+      # checkout the guard prints a warning and skips, and the rest of the
+      # suite still runs.
+      #
+      # To make the guard run here too, create a fine-grained PAT with read
+      # access to xnjiang/speakpen and add it as the SITE_REPO_TOKEN secret.
+      # Weigh that against putting a token to a private repo in a public
+      # repo's secrets — until then the guard runs locally, where whoever is
+      # changing sync behaviour has both repos checked out anyway.
       - name: Check out the site repo so the claims guard can run
+        id: site_repo
+        continue-on-error: true
         uses: actions/checkout@v4
         with:
           repository: xnjiang/speakpen
+          token: ${{ secrets.SITE_REPO_TOKEN || github.token }}
           path: .speakpen-site
+
+      # Say which mode the suite ran in. A guard that quietly stops guarding is
+      # worse than no guard, so this must never be silent.
+      - name: Report whether the cross-repo claims guard is active
+        run: |
+          if [ "${{ steps.site_repo.outcome }}" = "success" ]; then
+            echo "::notice::Claims guard ACTIVE — checked against the site's product_claims.json"
+          else
+            echo "::warning::Claims guard SKIPPED — could not check out xnjiang/speakpen (it is private). Public claims about sync are NOT verified in this run. See the comment in .github/workflows/ci.yml to enable it."
+          fi
 
       - run: npm test
         env:

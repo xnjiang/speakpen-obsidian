@@ -51,7 +51,10 @@ export default class SpeakPenPlugin extends Plugin {
   }
 
   async loadPluginData() {
-    const data: Partial<PluginData> | null = await this.loadData();
+    // loadData() 返回 any,直接赋给带类型的变量会触发
+    // @typescript-eslint/no-unsafe-assignment(Obsidian 的自动审核会报)。
+    // 显式断言把这个不安全点收在一处,而不是散进整个方法。
+    const data = (await this.loadData()) as Partial<PluginData> | null;
     this.settings = Object.assign({}, DEFAULT_SETTINGS, data?.settings ?? {});
     this.syncState = migrateSyncState(data?.syncState);
   }

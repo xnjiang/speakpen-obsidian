@@ -1,6 +1,8 @@
 import esbuild from "esbuild";
 import process from "process";
-import builtins from "builtin-modules";
+// Node 自带 module.builtinModules,不需要 builtin-modules 这个包——
+// Obsidian 的自动审核会点名它(package.json:14 那条 warning)。
+import { builtinModules as builtins } from "node:module";
 
 const prod = process.argv[2] === "production";
 

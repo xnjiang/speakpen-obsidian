@@ -70,7 +70,6 @@ export class SpeakPenSettingTab extends PluginSettingTab {
         slider
           .setLimits(1, 60, 1)
           .setValue(this.plugin.settings.autoSyncIntervalMinutes)
-          .setDynamicTooltip()
           .onChange(async (value) => {
             this.plugin.settings.autoSyncIntervalMinutes = value;
             await this.plugin.savePluginData();

@@ -17,7 +17,7 @@ export class SpeakPenSettingTab extends PluginSettingTab {
     // 语气保持平实：token 是只读的，说清事实即可，不必渲染成风险提示。
     const tokenDesc = new DocumentFragment();
     tokenDesc.append(
-      "Generate a token in the SpeakPen web app at speakpen.app/app, under Settings → API Tokens, then paste it here."
+      "Generate a token in the SpeakPen web app at speakpen.app/app, under Settings → Connections (Obsidian card → Generate token), then paste it here."
     );
     tokenDesc.append(tokenDesc.createEl("br"));
     tokenDesc.append(

@@ -1,0 +1,3 @@
+# speakpen-obsidian
+
+@AGENTS.md

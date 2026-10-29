@@ -3,3 +3,5 @@ main.js
 dist/
 data.json
 .DS_Store
+
+.worktrees/
